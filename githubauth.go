@@ -98,7 +98,7 @@ func (h *Handler) ServeHTTPContext(ctx context.Context, w http.ResponseWriter, r
 func (h *Handler) loginOk(ctx context.Context, w http.ResponseWriter, r *http.Request) (context.Context, bool) {
 	var user sess
 	err := session.Get(r, &user, h.sessionConfig())
-	if err != nil {
+	if err != nil && err != http.ErrNoCookie {
 		h.deleteCookie(w)
 		http.Error(w, "internal error", 500)
 		return ctx, false
