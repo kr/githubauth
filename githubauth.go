@@ -21,9 +21,9 @@ type Session struct {
 	HTTPClient *http.Client
 }
 
-type contextKey struct{}
+type contextKey int
 
-var sessionKey = contextKey{}
+var sessionKey contextKey = 0
 
 // GetSession returns data about the logged-in user
 // given the Context provided to a ContextHandler.
