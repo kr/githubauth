@@ -23,7 +23,7 @@ type Session struct {
 
 type contextKey int
 
-var sessionKey contextKey = 0
+const sessionKey contextKey = 0
 
 // GetSession returns data about the logged-in user
 // given the Context provided to a ContextHandler.
