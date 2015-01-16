@@ -27,9 +27,9 @@ const sessionKey contextKey = 0
 
 // GetSession returns data about the logged-in user
 // given the Context provided to a ContextHandler.
-func GetSession(ctx context.Context) (s *Session, ok bool) {
-	s, ok = ctx.Value(sessionKey).(*Session)
-	return
+func GetSession(ctx context.Context) (*Session, bool) {
+	s, ok := ctx.Value(sessionKey).(*Session)
+	return s, ok
 }
 
 // A ContextHandler can be used as the HTTP handler
