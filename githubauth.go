@@ -15,10 +15,10 @@ import (
 const callbackPath = "/_githubauth"
 
 type Session struct {
-	// HTTPClient is an HTTP client obtained from oauth2.Config.Client.
+	// Client is an HTTP client obtained from oauth2.Config.Client.
 	// It adds necessary OAuth2 credentials to outgoing requests to
 	// perform GitHub API calls.
-	HTTPClient *http.Client
+	*http.Client
 }
 
 type contextKey int
@@ -118,7 +118,7 @@ func (h *Handler) loginOk(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if user.OAuthToken != nil {
 		session.Set(w, user, h.sessionConfig()) // refresh the cookie
 		ctx = context.WithValue(ctx, sessionKey, &Session{
-			HTTPClient: conf.Client(ctx, user.OAuthToken),
+			Client: conf.Client(ctx, user.OAuthToken),
 		})
 		return ctx, true
 	}
