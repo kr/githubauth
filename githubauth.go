@@ -7,11 +7,38 @@ import (
 	"time"
 
 	"github.com/kr/session"
+	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 )
 
 const callbackPath = "/_githubauth"
+
+type Session struct {
+	// HTTPClient is an HTTP client obtained from oauth2.Config.Client.
+	// It adds necessary OAuth2 credentials to outgoing requests to
+	// perform GitHub API calls.
+	HTTPClient *http.Client
+}
+
+type contextKey struct{}
+
+var sessionKey = contextKey{}
+
+// GetSession returns data about the logged-in user
+// given the Context provided to a ContextHandler.
+func GetSession(ctx context.Context) (s *Session, ok bool) {
+	s, ok = ctx.Value(sessionKey).(*Session)
+	return
+}
+
+// A ContextHandler can be used as the HTTP handler
+// in a Handler value in order to obtain information
+// about the logged-in GitHub user through the provided
+// Context. See GetSession.
+type ContextHandler interface {
+	ServeHTTPContext(context.Context, http.ResponseWriter, *http.Request)
+}
 
 // Handler is an HTTP handler that requires
 // users to log in with GitHub OAuth and requires
@@ -38,32 +65,40 @@ type Handler struct {
 	// Handler is the HTTP handler called
 	// once authentication is complete.
 	// If nil, http.DefaultServeMux is used.
+	// If the value implements ContextHandler,
+	// its ServeHTTPContext method will be called
+	// instead of ServeHTTP, and a *Session value
+	// can be obtained from GetSession.
 	Handler http.Handler
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.ServeHTTPContext(context.Background(), w, r)
+}
+
+func (h *Handler) ServeHTTPContext(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	handler := h.Handler
 	if handler == nil {
 		handler = http.DefaultServeMux
 	}
-	if h.loginOk(w, r) {
-		handler.ServeHTTP(w, r)
+	if ctx, ok := h.loginOk(ctx, w, r); ok {
+		if h2, ok := handler.(ContextHandler); ok {
+			h2.ServeHTTPContext(ctx, w, r)
+		} else {
+			handler.ServeHTTP(w, r)
+		}
 	}
 }
 
 // loginOk checks that the user is logged in and authorized.
 // If not, it performs one step of the oauth process.
-func (h *Handler) loginOk(w http.ResponseWriter, r *http.Request) bool {
+func (h *Handler) loginOk(ctx context.Context, w http.ResponseWriter, r *http.Request) (context.Context, bool) {
 	var user sess
 	err := session.Get(r, &user, h.sessionConfig())
 	if err != nil {
 		h.deleteCookie(w)
 		http.Error(w, "internal error", 500)
-		return false
-	}
-	if user.OK {
-		session.Set(w, sess{OK: true}, h.sessionConfig()) // refresh the cookie
-		return true
+		return ctx, false
 	}
 
 	redirectURL := "https://" + r.Host + callbackPath
@@ -74,31 +109,38 @@ func (h *Handler) loginOk(w http.ResponseWriter, r *http.Request) bool {
 		Scopes:       []string{"account", "orglist"},
 		Endpoint:     github.Endpoint,
 	}
+	if user.OAuthToken != nil {
+		session.Set(w, user, h.sessionConfig()) // refresh the cookie
+		ctx = context.WithValue(ctx, sessionKey, &Session{
+			HTTPClient: conf.Client(ctx, user.OAuthToken),
+		})
+		return ctx, true
+	}
 	if r.URL.Path == callbackPath {
 		if r.FormValue("state") != user.State {
 			h.deleteCookie(w)
 			http.Error(w, "access forbidden", 401)
-			return false
+			return ctx, false
 		}
-		tok, err := conf.Exchange(oauth2.NoContext, r.FormValue("code"))
+		tok, err := conf.Exchange(ctx, r.FormValue("code"))
 		if err != nil {
 			h.deleteCookie(w)
 			http.Error(w, "access forbidden", 401)
-			return false
+			return ctx, false
 		}
-		client := conf.Client(oauth2.NoContext, tok)
+		client := conf.Client(ctx, tok)
 		if h.RequireOrg != "" {
 			resp, err := client.Head("https://api.github.com/usr/memberships/orgs/" + h.RequireOrg)
 			if err != nil || resp.StatusCode != 200 {
 				h.deleteCookie(w)
 				http.Error(w, "access forbidden", 401)
-				return false
+				return ctx, false
 			}
 		}
 
-		session.Set(w, sess{OK: true}, h.sessionConfig())
+		session.Set(w, sess{OAuthToken: tok}, h.sessionConfig())
 		http.Redirect(w, r, user.NextURL, http.StatusTemporaryRedirect)
-		return false
+		return ctx, false
 	}
 
 	u := *r.URL
@@ -107,7 +149,7 @@ func (h *Handler) loginOk(w http.ResponseWriter, r *http.Request) bool {
 	state := newState()
 	session.Set(w, sess{NextURL: u.String(), State: state}, h.sessionConfig())
 	http.Redirect(w, r, conf.AuthCodeURL(state), http.StatusTemporaryRedirect)
-	return false
+	return ctx, false
 }
 
 func (h *Handler) sessionConfig() *session.Config {
@@ -131,9 +173,9 @@ func (h *Handler) deleteCookie(w http.ResponseWriter) error {
 }
 
 type sess struct {
-	OK      bool   `json:"omitempty"`
-	NextURL string `json:",omitempty"`
-	State   string `json:",omitempty"`
+	OAuthToken *oauth2.Token `json:",omitempty"`
+	NextURL    string        `json:",omitempty"`
+	State      string        `json:",omitempty"`
 }
 
 func newState() string {
