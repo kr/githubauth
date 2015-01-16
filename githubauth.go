@@ -136,7 +136,7 @@ func (h *Handler) loginOk(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 		client := conf.Client(ctx, tok)
 		if h.RequireOrg != "" {
-			resp, err := client.Head("https://api.github.com/usr/memberships/orgs/" + h.RequireOrg)
+			resp, err := client.Head("https://api.github.com/user/memberships/orgs/" + h.RequireOrg)
 			if err != nil || resp.StatusCode != 200 {
 				h.deleteCookie(w)
 				http.Error(w, "access forbidden", 401)
