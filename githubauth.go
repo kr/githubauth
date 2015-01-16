@@ -59,8 +59,11 @@ type Handler struct {
 	Keys   []*[32]byte
 
 	// Used to initialize corresponding fields of oauth2.Config.
+	// Scopes can be nil, in which case user:email and read:org
+	// will be requested.
 	ClientID     string
 	ClientSecret string
+	Scopes       []string
 
 	// Handler is the HTTP handler called
 	// once authentication is complete.
@@ -106,8 +109,11 @@ func (h *Handler) loginOk(ctx context.Context, w http.ResponseWriter, r *http.Re
 		ClientID:     h.ClientID,
 		ClientSecret: h.ClientSecret,
 		RedirectURL:  redirectURL,
-		Scopes:       []string{"account", "orglist"},
+		Scopes:       h.Scopes,
 		Endpoint:     github.Endpoint,
+	}
+	if conf.Scopes == nil {
+		conf.Scopes = []string{"user:email", "read:org"}
 	}
 	if user.OAuthToken != nil {
 		session.Set(w, user, h.sessionConfig()) // refresh the cookie
