@@ -3,6 +3,8 @@ package githubauth
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -136,10 +138,29 @@ func (h *Handler) loginOk(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 		client := conf.Client(ctx, tok)
 		if h.RequireOrg != "" {
-			resp, err := client.Head("https://api.github.com/user/memberships/orgs/" + h.RequireOrg)
+			resp, err := client.Get("https://api.github.com/user/memberships/orgs/" + h.RequireOrg)
 			if err != nil || resp.StatusCode != 200 {
 				h.deleteCookie(w)
 				http.Error(w, "access forbidden", 401)
+				return ctx, false
+			}
+			var v struct {
+				State string
+				User struct {
+					Login string
+				}
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+				log.Println("Decode:", err)
+				h.deleteCookie(w)
+				http.Error(w, "Internal Server Error - Invalid JSON from Github", 500)
+				return ctx, false
+			}
+			log.Println("State:", v.User.Login, v.State)
+			if v.State != "active" {
+				log.Println("User not active but:", v.State)
+				h.deleteCookie(w)
+				http.Error(w, "Access Forbidden - You're not in the Github org.", 401)
 				return ctx, false
 			}
 		}
