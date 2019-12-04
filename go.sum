@@ -1,0 +1,4 @@
+github.com/kr/session v0.1.0/go.mod h1:lMl9UjoVzvWb8fhrlB6LYfKyfj1nAX8vxa8hTF0usSc=
+golang.org/x/crypto v0.0.0-20180505025534-4ec37c66abab/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
+golang.org/x/net v0.0.0-20180502164142-640f4622ab69/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
+golang.org/x/oauth2 v0.0.0-20180503012634-cdc340f7c179/go.mod h1:N/0e6XlmueqKjAGxoOufVs8QHGRruUQn6yWY3a++T0U=
